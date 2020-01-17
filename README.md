@@ -1,3 +1,3 @@
 # StoreLayer
 
-A description of this package.
+Apple AppStore subcription handling including the receipt validation. Is a wrapper around the StoreKit framework.
