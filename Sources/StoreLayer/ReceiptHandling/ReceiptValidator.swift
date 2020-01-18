@@ -51,64 +51,79 @@ public struct ReceiptValidationConfig {
 }
 
 
-public struct ReceiptValidator {
-    var delegate: ReceiptValidationDelegate?
 
-    static let restoreNotification = "RestoreNotification"
+public struct ReceiptValidator {
     
-    let config: ReceiptValidationConfig
+    
+    // MARK: - Properties
+    //
+    
+    
+    // MARK: - Private properties
+    
+    
+    /// Valiadator config
+    private let config: ReceiptValidationConfig
     
     private weak var store: IAPStore?
     
-    internal var restoreInProgress: Bool = false
-    
-    @available(iOS 10.0, *)
-    static var log: OSLog {
+    /// Logger
+    private static var log: OSLog {
         return OSLog(subsystem: Bundle.main.bundleIdentifier!, category: "RV")
     }
     
-    init(withConfig config: ReceiptValidationConfig, withParent parent: IAPStore? = nil) {
+    
+    // MARK: - Internal properties
+    
+    /// Flag that tells whether a restore is in progress
+    internal var restoreInProgress: Bool = false
+    
+    /// Notification name
+    static internal let restoreNotification = "RestoreNotification"
+    
+    
+    // MARK: - Public properties
+    
+    /// Validation delegate
+    internal var delegate: ReceiptValidationDelegate?
+    
+    /// Validation results
+    internal let dictResults: [ReceiptValidatorResults: ReceiptValidationActions] =
+        [
+            .subsValid : .pass,
+            .errorOnServer : .tolerate,
+            .appleServerDown : .tolerate,
+            .networkError : .tolerate,
+            .statusUnknown : .tolerate,
+            .secretKeyNotMatch : .terminate,
+            .couldNotFindReceipt : .terminate,
+            .receiptInvalid : .terminate,
+            .subsExpired : .terminate,
+            .corruptData : .terminate,
+            .bundleIdInvalid : .terminate,
+            .corruptReceiptData : .terminate,
+            .wrongEnviroment : .reRun
+    ]
+    
+    // MARK: - Initialization
+    //
+    public init(withConfig config: ReceiptValidationConfig, withParent parent: IAPStore? = nil) {
         self.config = config
         self.store = parent
     }
-
-    let dictResults: [ReceiptValidatorResults: ReceiptValidationActions] =
-        [
-          .subsValid : .pass,
-          .errorOnServer : .tolerate,
-          .appleServerDown : .tolerate,
-          .networkError : .tolerate,
-          .statusUnknown : .tolerate,
-          .secretKeyNotMatch : .terminate,
-          .couldNotFindReceipt : .terminate,
-          .receiptInvalid : .terminate,
-          .subsExpired : .terminate,
-          .corruptData : .terminate,
-          .bundleIdInvalid : .terminate,
-          .corruptReceiptData : .terminate,
-          .wrongEnviroment : .reRun
-        ]
     
-    // Start the validation process
-    func start() {
-        // check first if the URL was found
-        if config.receiptUrl != nil {
-            // check if the receipt can be located
-            self.isReceiptFound()
-        } else {
-            self.endValidation(.couldNotFindReceipt)
-            
-            if #available(iOS 10.0, *) {
-                os_log("no R.", log: ReceiptValidator.log, type: .error)
-            }
-        }
-    }
+    
+    // MARK: - Methods
+    //
+    
+    
+    // MARK: - Private methods
     
     // Check if the receipt is accessible
     private func isReceiptFound() {
         do {
             if let _ = try config.receiptUrl?.checkResourceIsReachable() {
-              self.loadReceipt()
+                self.loadReceipt()
             } else {
                 self.endValidation(.couldNotFindReceipt)
             }
@@ -143,7 +158,7 @@ public struct ReceiptValidator {
         } else {
             jsonDict = ["data":dataEncoded, "env":"0"]
         }
- 
+        
         do {
             let jsonData = try JSONSerialization.data(withJSONObject: jsonDict, options: [])
             request.httpMethod = "POST"
@@ -250,11 +265,9 @@ public struct ReceiptValidator {
             // check the expiration date
             if let receipt = data["receipt"] as? NSDictionary,
                 let in_app = receipt["in_app"] as? [NSDictionary] {
-                var validPremiumMonthly = false
-                var validPremiumYearly = false
                 
                 print("Current time is: \(Date().timeIntervalSince1970 * 1000)")
-
+                
                 if validPremiumMonthly || validPremiumYearly {
                     self.endValidation(.subsValid)
                 } else {
@@ -338,13 +351,13 @@ public struct ReceiptValidator {
         // TBA -- only for test purposes
         var alert: UIAlertController!
         if result == .subsExpired && !restoreInProgress {
-//            alert = UIAlertController(title: ":(", message: "Premium expired", preferredStyle: .alert)
+            //            alert = UIAlertController(title: ":(", message: "Premium expired", preferredStyle: .alert)
         } else if result == .subsExpired && restoreInProgress && !config.silent {
             alert = UIAlertController(title: "⛔️", message: "No valid purchase to restore", preferredStyle: .alert)
         } else if result == .corruptReceiptData {
-//            alert = UIAlertController(title: ":(", message: "Corrupt receipt", preferredStyle: .alert)
+            //            alert = UIAlertController(title: ":(", message: "Corrupt receipt", preferredStyle: .alert)
         } else if result == .subsValid && !restoreInProgress {
-//            alert = UIAlertController(title: ":)", message: "Premium OK", preferredStyle: .alert)
+            //            alert = UIAlertController(title: ":)", message: "Premium OK", preferredStyle: .alert)
         } else if result == .subsValid && restoreInProgress && !config.silent {
             alert = UIAlertController(title: "✅", message: "Last purchase is restored", preferredStyle: .alert)
         }
@@ -367,13 +380,31 @@ public struct ReceiptValidator {
             }
         }
     } // end of endValidation()
+    
+    // MARK: - Public methods
+    
+    // Start the validation process
+    public func start() {
+        // check first if the URL was found
+        if config.receiptUrl != nil {
+            // check if the receipt can be located
+            self.isReceiptFound()
+        } else {
+            self.endValidation(.couldNotFindReceipt)
+            
+            if #available(iOS 10.0, *) {
+                os_log("no R.", log: ReceiptValidator.log, type: .error)
+            }
+        }
+    }
+    
 }
 
 
 /* ==================================================== */
 /* Extension to String to remove \n \r & +              */
 /* ==================================================== */
-extension String
+internal extension String
 {
     func complyForPhp() -> String {
         var stream = self
@@ -385,7 +416,7 @@ extension String
     
     /**
      Method to strip ".", "$", "#", "[", "]" chars from a string
-    */
+     */
     func complyForFb() -> String {
         var _stream = self
         
