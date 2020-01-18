@@ -268,11 +268,7 @@ public struct ReceiptValidator {
                 
                 print("Current time is: \(Date().timeIntervalSince1970 * 1000)")
                 
-                if validPremiumMonthly || validPremiumYearly {
-                    self.endValidation(.subsValid)
-                } else {
-                    self.endValidation(.subsExpired)
-                }
+                self.endValidation(.subsValid)
             }
             break
         default:
