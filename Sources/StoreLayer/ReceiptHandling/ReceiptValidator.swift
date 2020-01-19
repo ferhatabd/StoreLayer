@@ -19,7 +19,7 @@ public protocol ReceiptValidationDelegate { // TBA remove alert from the protoco
 
 
 // Error enumeration
-public enum ReceiptValidatorResults: Int {
+public enum ReceiptValidatorResults: Int, CustomStringConvertible {
     case couldNotFindReceipt = 0
     case errorOnServer = 1
     case receiptInvalid = 2
@@ -32,7 +32,42 @@ public enum ReceiptValidatorResults: Int {
     case networkError = 9
     case wrongEnviroment = 10
     case secretKeyNotMatch = 11
-    case statusUnknown = 12
+    case noProductAvailable = 12
+    case statusUnknown = 13
+    
+    public var description: String {
+        switch self {
+        case .couldNotFindReceipt:
+            return "couldNotFindReceipt"
+        case .errorOnServer:
+            return "errorOnServer"
+        case .receiptInvalid:
+            return "receiptInvalid"
+        case .subsExpired:
+            return "subsExpired"
+        case .subsValid:
+            return "subsValid"
+        case .corruptData:
+            return "corruptData"
+        case .bundleIdInvalid:
+            return "bundleIdInvalid"
+        case .appleServerDown:
+            return "appleServerDown"
+        case .corruptReceiptData:
+            return "corruptReceiptData"
+        case .networkError:
+            return "networkError"
+        case .wrongEnviroment:
+            return "wrongEnvironment"
+        case .secretKeyNotMatch:
+            return "secretKeyNotMatch"
+        case .noProductAvailable:
+            return "noProductAvailable"
+            
+        default:
+            return "statusUknonwn"
+        }
+    }
 }
 
 public enum ReceiptValidationActions {
@@ -268,7 +303,22 @@ public struct ReceiptValidator {
                 
                 print("Current time is: \(Date().timeIntervalSince1970 * 1000)")
                 
-                self.endValidation(.subsValid)
+                var validProduct = false
+                
+                guard let _products = store?.products else {
+                    endValidation(.noProductAvailable)
+                    return
+                }
+                
+                for _product in _products {
+                    if let _productDict = getElementsFromDict(in_app, which: "product_id", matching: _product.productIdentifier) {
+                        validProduct = checkExpire(_productDict)
+                        let expiration = getExpire(_productDict)
+                        os_log("Product expires at: %d", log: ReceiptValidator.log, type: .default, expiration)
+                    }
+                }
+                
+                self.endValidation(validProduct ? .subsValid : .subsExpired)
             }
             break
         default:
@@ -341,7 +391,7 @@ public struct ReceiptValidator {
         
         
         if #available(iOS 10.0, *) {
-            os_log("result available", log: ReceiptValidator.log, type: .default)
+            os_log("Result available: %@", log: ReceiptValidator.log, type: .default, result.description)
         }
         
         // TBA -- only for test purposes

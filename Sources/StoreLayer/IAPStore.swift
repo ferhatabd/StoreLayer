@@ -96,7 +96,7 @@ open class IAPStore : NSObject  {
     public static let IAPStorePurchaseNotification = "IAPStorePurchaseNotification"
     
     /// Currently existing products
-    public static var products: [SKProduct]?
+    public var products: [SKProduct]?
     
     /// Currently purchased products
     public static var purchasedProductIdentifiers =  Set<ProductIdentifier>()
@@ -239,6 +239,9 @@ open class IAPStore : NSObject  {
         UIApplication.shared.open(_url, options: [.universalLinksOnly : 0], completionHandler: completion)
     }
     
+    public func checkReceipt() {
+        receiptValidator.start()
+    }
   
 } // end of the class implementation
 
@@ -250,7 +253,7 @@ extension IAPStore {
         productsRequest?.cancel()
         
         // Check if the products are previously loaded
-        if let products = IAPStore.products {
+        if let products = self.products {
             completionHandler(true,products, nil)
         } else {
             existingProductIdentifiers = Array<ProductIdentifier>() // reset the products set
@@ -276,8 +279,8 @@ extension IAPStore {
         return false
     }
     
-    public class func canMakePayments() -> Bool {
-        return SKPaymentQueue.canMakePayments()
+    public func canMakePayments() -> Bool {
+        SKPaymentQueue.canMakePayments()
     }
     
     // Method to restore previous purchases
@@ -293,15 +296,21 @@ extension IAPStore {
 extension IAPStore: SKProductsRequestDelegate {
     
     public func productsRequest(_ request: SKProductsRequest, didReceive response: SKProductsResponse) {
-        print("Loaded list of products...")
+        
+        os_log("Loaded list of products...", log: IAPStore.log, type: .default)
         let products = response.products
-        IAPStore.products = products
+        self.products = products
         productsRequestCompletionHandler?(true, products, nil)
         clearRequestAndHandler()
         
-        
         for p in products {
-            print("Found product: \(p.productIdentifier) \(p.localizedTitle) \(p.price.floatValue)")
+            os_log("Found product: %@",
+                   log: IAPStore.log,
+                   type: .default,
+                   ["ident: \(p.productIdentifier)",
+                    "title: \(p.localizedTitle)",
+                    "price: \(p.price.floatValue)"])
+            
             existingProductIdentifiers.append(p.productIdentifier)
         }
         
@@ -311,14 +320,11 @@ extension IAPStore: SKProductsRequestDelegate {
     }
     
     public func request(_ request: SKRequest, didFailWithError error: Error) {
-        print("Failed to load list of products.")
-        print("Error: \(error.localizedDescription)")
+        os_log("Failed to load list of products: ", log: IAPStore.log, type: .default, error.localizedDescription)
         productsRequestCompletionHandler?(false, nil, error)
         clearRequestAndHandler()
         
-        if #available(iOS 10.0, *) {
-            os_log("Found total: 0", log: IAPStore.log, type: .default)
-        }
+        os_log("Found total: 0", log: IAPStore.log, type: .default)
     }
     
     private func clearRequestAndHandler() {
@@ -412,11 +418,7 @@ extension IAPStore: SKPaymentTransactionObserver {
     
     
     public func paymentQueue(_ queue: SKPaymentQueue, shouldAddStorePayment payment: SKPayment, for product: SKProduct) -> Bool {
-        if IAPStore.canMakePayments() {
-            return true
-        } else {
-            return false
-        }
+        canMakePayments()
     }
     
     
