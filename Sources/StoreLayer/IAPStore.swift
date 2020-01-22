@@ -197,15 +197,12 @@ open class IAPStore : NSObject  {
     }
     
     /// AppStore rating handling
+    @available(tvOS, unavailable)
     public func askForRating() {
-        if #available(iOS 10.3, *) {
             if userCanBeAskedToRate(shown: config.lastTimeRateAsked, score: config.userUsageTime) {
-                SKStoreReviewController.requestReview()
-                os_log("User was asked for rating", log: IAPStore.log, type: .default)
-            }
-        } else {
-            // Fallback on earlier versions
-        }
+             SKStoreReviewController.requestReview()
+             os_log("User was asked for rating", log: IAPStore.log, type: .default)
+         }
     }
     
     /**
