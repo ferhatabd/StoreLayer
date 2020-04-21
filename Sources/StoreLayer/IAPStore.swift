@@ -24,26 +24,11 @@ public enum IAPStoreErrors: Error {
 
 public struct IAPStoreConfifg {
     
-    /// Number of days that should be between two rating dialogue prompts
-    public var rateAskTimeThreshold: Double = 60
-    
-    /// Total active duration thereshold for presenting the rating dialogue - user must have achieved at least this much of totalDuration to be eligible to be asked to rate [min]
-    public var rateAskDurationThreshold: Double = 25
-    
     /// Apple AppID
     public var appleAppId: Int = 0
     
     /// Product identifiers that are currently available on the AppStoe
     public var productIdentifiers: Set<ProductIdentifier> = .init()
-    
-    /// Last rate interaction date
-    public var lastTimeRateAsked = Date()
-    
-    /// For how long has the user been using the app
-    public var userUsageTime: Double = 0
-    
-    /// User's usage time when the rating was lasted asked
-    public var userUsageTimeAtLastRating: Double = 0
     
     /// Sandbox environment i active
     public var sandbox = false
@@ -145,28 +130,6 @@ open class IAPStore : NSObject  {
         isObserving = false
     }
     
-    /**
-       Check if it's ok to show the rating dialogue to the user
-       - parameters:
-       - shown at: The date at which the user was asked to rate
-       - count: Number of times the user was asked to rate
-       - returns: True if it's ok to ask the user to rate, False otherwise
-       */
-      private func userCanBeAskedToRate(shown at: Date, score: Double) -> Bool {
-          // Check first how much the user has been active since the last time he was asked to rate
-          let scoreCheck = score - config.userUsageTimeAtLastRating
-          guard scoreCheck >= Double(config.rateAskDurationThreshold) * 60 else {return false}
-          
-          // Check if the threshold of the days between two rating prompts has been reached
-          let secondsDiff = TimeInterval(config.rateAskTimeThreshold * 24 * 60 * 60)
-          let allowedDate = Date(timeInterval: secondsDiff, since: at)
-          
-          if allowedDate < Date() {
-              return true
-          } else {
-              return false
-          }
-      }
     
     // MARK: - Internal methods
     // Purchase delivery
@@ -199,10 +162,8 @@ open class IAPStore : NSObject  {
     /// AppStore rating handling
     @available(tvOS, unavailable)
     public func askForRating() {
-            if userCanBeAskedToRate(shown: config.lastTimeRateAsked, score: config.userUsageTime) {
-             SKStoreReviewController.requestReview()
-             os_log("User was asked for rating", log: IAPStore.log, type: .default)
-         }
+        SKStoreReviewController.requestReview()
+        os_log("User was asked for rating", log: IAPStore.log, type: .default)
     }
     
     /**
@@ -211,7 +172,7 @@ open class IAPStore : NSObject  {
      - completion: A completion handler for the higher control in case i
      t needs to be notified about the results
      */
-    public func askForRating(completion: ((_ success: Bool) -> Void)?) {
+    public func callToReview(completion: ((_ success: Bool) -> Void)?) {
         
         let _url: URL
         
@@ -246,12 +207,12 @@ open class IAPStore : NSObject  {
 
 extension IAPStore {
     
-    public func requestProducts(_ completionHandler: @escaping ProductsRequestCompletionHandler) {
+    public func requestProducts(_ completionHandler: ProductsRequestCompletionHandler?=nil) {
         productsRequest?.cancel()
         
         // Check if the products are previously loaded
         if let products = self.products {
-            completionHandler(true,products, nil)
+            completionHandler?(true, products, nil)
         } else {
             existingProductIdentifiers = Array<ProductIdentifier>() // reset the products set
             productsRequestCompletionHandler = completionHandler
@@ -306,6 +267,7 @@ extension IAPStore: SKProductsRequestDelegate {
                    type: .default,
                    ["ident: \(p.productIdentifier)",
                     "title: \(p.localizedTitle)",
+                    "desc: \(p.localizedDescription)",
                     "price: \(p.price.floatValue)"])
             
             existingProductIdentifiers.append(p.productIdentifier)
